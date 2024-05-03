@@ -18,7 +18,7 @@ struct Args {
     #[clap(short, long)]
     attribute: Option<String>,
 
-    #[clap(short, long)]
+    #[clap(long, env = "HEADERS")]
     headers: bool,
 }
 
@@ -77,8 +77,7 @@ pub async fn download(client: &Client, url: &str) -> Result<String, Box<dyn std:
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     if let Some(url) = args.url {
         let client = reqwest::Client::new();
@@ -104,5 +103,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         eprintln!("need to give me a URL");
     }
+    Ok(())
+}
+
+#[cfg(feature = "multi")]
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    the_main().await
+}
+
+#[cfg(feature = "single")]
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(async {
+            the_main().await.unwrap();
+        });
     Ok(())
 }
