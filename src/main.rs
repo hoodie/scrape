@@ -18,6 +18,9 @@ struct Args {
     #[clap(short, long)]
     attribute: Option<String>,
 
+    #[clap(short, long)]
+    quiet: bool,
+
     #[clap(long, env = "HEADERS")]
     headers: bool,
 }
@@ -35,7 +38,12 @@ fn progress_bar(total_size: u64, url: &str) -> ProgressBar {
     progress_bar
 }
 
-pub async fn download(client: &Client, url: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn download(
+    client: &Client,
+    url: &str,
+    print_headers: bool,
+    quiet: bool,
+) -> Result<String, Box<dyn std::error::Error>> {
     // Reqwest setup
     let res = client
         .get(url)
@@ -43,13 +51,12 @@ pub async fn download(client: &Client, url: &str) -> Result<String, Box<dyn std:
         .await
         .map_err(|_| format!("Failed to GET from '{}'", &url))?;
 
-    let args = Args::parse();
-    if args.headers {
+    if print_headers {
         eprintln!("{:#?}", res.headers());
     }
 
     if let Some(total_size) = res.content_length() {
-        let progress_bar = progress_bar(total_size, url);
+        let progress_bar = (!quiet).then(|| progress_bar(total_size, url));
 
         // download chunks
         let mut buffer = Vec::with_capacity(total_size as usize);
@@ -64,34 +71,46 @@ pub async fn download(client: &Client, url: &str) -> Result<String, Box<dyn std:
 
             let new = min(downloaded + (chunk.len() as u64), total_size);
             downloaded = new;
-            progress_bar.set_position(new);
+
+            if let Some(ref progress_bar) = progress_bar {
+                progress_bar.set_position(new);
+            }
         }
 
-        progress_bar.finish_and_clear();
+        if let Some(progress_bar) = progress_bar {
+            progress_bar.finish_and_clear();
+        }
 
         Ok(String::from_utf8(buffer)?)
     } else {
-        eprintln!("no content-length header for '{}'", &url);
+        if !quiet {
+            eprintln!("no content-length header for '{}'", &url);
+        }
 
         Ok(res.text().await?)
     }
 }
 
 async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
-    if let Some(url) = args.url {
+    let Args {
+        url,
+        selector,
+        attribute,
+        quiet,
+        headers,
+    } = Args::parse();
+    if let Some(url) = url {
         let client = reqwest::Client::new();
-        let body = download(&client, &url).await?;
+        let body = download(&client, &url, headers, quiet).await?;
 
-        if let Some(selector) = args.selector {
+        if let Some(selector) = selector {
             let selector = Selector::parse(&selector).unwrap();
 
             let document = Html::parse_document(&body);
             document.select(&selector);
 
             for node in document.select(&selector) {
-                if let Some(attribute) = args.attribute.as_ref().and_then(|a| node.value().attr(a))
-                {
+                if let Some(attribute) = attribute.as_ref().and_then(|a| node.value().attr(a)) {
                     println!("{}", attribute);
                 } else {
                     println!("{}", node.inner_html().trim());

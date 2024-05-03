@@ -20,7 +20,7 @@ default = ["single"]
 
 [profile.release]
 strip = true
-opt-level = "z"
+opt-level = "z"  # Optimize for size.
 lto = true
 codegen-units = 1
 panic = "abort"
