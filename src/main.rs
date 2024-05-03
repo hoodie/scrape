@@ -111,10 +111,10 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(url) = url {
         let url = parse_url(&url)?;
         let client = reqwest::Client::new();
-        let body = download(&client, &url, headers, quiet).await?;
 
         if let Some(selector) = selector {
-            let selector = Selector::parse(&selector).unwrap();
+            let selector = Selector::parse(&selector).map_err(|_| format!("Invalid selector"))?;
+            let body = download(&client, &url, headers, quiet).await?;
 
             let document = Html::parse_document(&body);
             document.select(&selector);
@@ -127,6 +127,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         } else {
+            let body = download(&client, &url, headers, quiet).await?;
             println!("{}", body);
         }
     } else {
