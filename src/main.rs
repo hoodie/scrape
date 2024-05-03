@@ -4,6 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use scraper::{Html, Selector};
 use std::{cmp::min, io::Write};
+use url::Url;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -40,13 +41,13 @@ fn progress_bar(total_size: u64, url: &str) -> ProgressBar {
 
 pub async fn download(
     client: &Client,
-    url: &str,
+    url: &Url,
     print_headers: bool,
     quiet: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     // Reqwest setup
     let res = client
-        .get(url)
+        .get(url.as_str())
         .send()
         .await
         .map_err(|_| format!("Failed to GET from '{}'", &url))?;
@@ -56,7 +57,7 @@ pub async fn download(
     }
 
     if let Some(total_size) = res.content_length() {
-        let progress_bar = (!quiet).then(|| progress_bar(total_size, url));
+        let progress_bar = (!quiet).then(|| progress_bar(total_size, url.as_str()));
 
         // download chunks
         let mut buffer = Vec::with_capacity(total_size as usize);
@@ -91,6 +92,14 @@ pub async fn download(
     }
 }
 
+fn parse_url(input: &str) -> Result<Url, url::ParseError> {
+    let parsed = Url::parse(input).or_else(|e| match e {
+        url::ParseError::RelativeUrlWithoutBase => Url::parse(&format!("https://{input}")),
+        _ => Err(e),
+    });
+    parsed
+}
+
 async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
     let Args {
         url,
@@ -100,6 +109,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         headers,
     } = Args::parse();
     if let Some(url) = url {
+        let url = parse_url(&url)?;
         let client = reqwest::Client::new();
         let body = download(&client, &url, headers, quiet).await?;
 
