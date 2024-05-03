@@ -28,6 +28,7 @@ fn progress_bar(total_size: u64, url: &str) -> ProgressBar {
     progress_bar.set_style(
             ProgressStyle::default_bar()
             .template("{msg}\n{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+            .unwrap()
             .progress_chars("█>-"));
 
     progress_bar.set_message(format!("Downloading {}", url));
