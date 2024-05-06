@@ -93,11 +93,10 @@ pub async fn download(
 }
 
 fn parse_url(input: &str) -> Result<Url, url::ParseError> {
-    let parsed = Url::parse(input).or_else(|e| match e {
+    Url::parse(input).or_else(|e| match e {
         url::ParseError::RelativeUrlWithoutBase => Url::parse(&format!("https://{input}")),
         _ => Err(e),
-    });
-    parsed
+    })
 }
 
 async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
@@ -116,7 +115,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
 
         if let Some(selector) = selector {
-            let selector = Selector::parse(&selector).map_err(|_| format!("Invalid selector"))?;
+            let selector = Selector::parse(&selector).map_err(|_| "Invalid selector")?;
             let body = download(&client, &url, headers, quiet).await?;
 
             let document = Html::parse_document(&body);
