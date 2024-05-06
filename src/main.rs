@@ -108,6 +108,9 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         quiet,
         headers,
     } = Args::parse();
+
+    let log_on = std::env::var("RUST_LOG").is_ok();
+
     if let Some(url) = url {
         let url = parse_url(&url)?;
         let client = reqwest::Client::new();
@@ -130,7 +133,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
             let body = download(&client, &url, headers, quiet).await?;
             println!("{}", body);
         }
-    } else {
+    } else if log_on {
         eprintln!("need to give me a URL");
     }
     Ok(())
