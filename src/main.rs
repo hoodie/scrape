@@ -5,7 +5,7 @@ use reqwest::{
     header::{HeaderMap, ACCEPT, USER_AGENT},
     Client,
 };
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 use std::{cmp::min, io::Write};
 use url::Url;
 
@@ -34,6 +34,10 @@ struct Args {
     /// print headers
     #[clap(long, env = "HEADERS")]
     headers: bool,
+
+    /// print count nodes only
+    #[clap(long, short = 'n')]
+    count: Option<usize>,
 }
 
 fn progress_bar(total_size: u64, url: &str) -> ProgressBar {
@@ -70,7 +74,8 @@ async fn download(
         headers.insert(USER_AGENT, "Mozilla/5.0".parse()?);
     }
 
-    eprintln!("request headers {headers:#?}");
+    if_log(|| eprintln!("request headers {headers:#?}"));
+
     // Reqwest setup
     let res = client
         .get(url.as_str())
@@ -111,9 +116,7 @@ async fn download(
 
         Ok(String::from_utf8(buffer)?)
     } else {
-        if !quiet {
-            eprintln!("no content-length header for '{}'", &url);
-        }
+        if_log(|| eprintln!("no content-length header for '{}'", &url));
 
         Ok(res.text().await?)
     }
@@ -126,15 +129,33 @@ fn parse_url(input: &str) -> Result<Url, url::ParseError> {
     })
 }
 
+fn take_nodes<'a>(
+    document: &'a Html,
+    selector: &'a Selector,
+    count: Option<usize>,
+) -> Box<dyn Iterator<Item = ElementRef<'a>> + 'a> {
+    if let Some(count) = count {
+        Box::new(document.select(&selector).take(count))
+    } else {
+        Box::new(document.select(&selector))
+    }
+}
+
+fn if_log(then: impl Fn()) {
+    static PASSWORD: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *PASSWORD.get_or_init(|| std::env::var("RUST_LOG").is_ok()) {
+        then()
+    }
+}
+
 async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
     let args @ Args {
         url,
         selector,
         attribute,
+        count,
         ..
     } = &Args::parse();
-
-    let log_on = std::env::var("RUST_LOG").is_ok();
 
     if let Some(url) = url {
         let url = parse_url(&url)?;
@@ -147,7 +168,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
             let document = Html::parse_document(&body);
             document.select(&selector);
 
-            for node in document.select(&selector) {
+            for node in take_nodes(&document, &selector, *count) {
                 if let Some(attribute) = attribute.as_ref().and_then(|a| node.value().attr(a)) {
                     println!("{}", attribute);
                 } else {
@@ -158,8 +179,8 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
             let body = download(&client, &url, &args).await?;
             println!("{}", body);
         }
-    } else if log_on {
-        eprintln!("need to give me a URL");
+    } else {
+        if_log(|| eprintln!("need to give me a URL"))
     }
     Ok(())
 }
