@@ -1,7 +1,10 @@
 use clap::Parser;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use reqwest::Client;
+use reqwest::{
+    header::{HeaderMap, ACCEPT, USER_AGENT},
+    Client,
+};
 use scraper::{Html, Selector};
 use std::{cmp::min, io::Write};
 use url::Url;
@@ -16,12 +19,19 @@ struct Args {
     /// select html from the downloaded age
     selector: Option<String>,
 
+    /// select a certain attribute
     #[clap(short, long)]
     attribute: Option<String>,
 
+    /// do not print progress or warnings
     #[clap(short, long)]
     quiet: bool,
 
+    /// pretend to be Mozilla, like everyone else
+    #[clap(short, long)]
+    mozilla: bool,
+
+    /// print headers
     #[clap(long, env = "HEADERS")]
     headers: bool,
 }
@@ -39,20 +49,37 @@ fn progress_bar(total_size: u64, url: &str) -> ProgressBar {
     progress_bar
 }
 
-pub async fn download(
+async fn download(
     client: &Client,
     url: &Url,
-    print_headers: bool,
-    quiet: bool,
+    Args {
+        headers: print_headers,
+        mozilla,
+
+        quiet,
+        ..
+    }: &Args,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let mut headers = HeaderMap::new();
+
+    if *mozilla {
+        headers.insert(
+            ACCEPT,
+            "text/html,application/xhtml+xml,application/xml".parse()?,
+        );
+        headers.insert(USER_AGENT, "Mozilla/5.0".parse()?);
+    }
+
+    eprintln!("request headers {headers:#?}");
     // Reqwest setup
     let res = client
         .get(url.as_str())
+        .headers(headers)
         .send()
         .await
         .map_err(|_| format!("Failed to GET from '{}'", &url))?;
 
-    if print_headers {
+    if *print_headers {
         eprintln!("{:#?}", res.headers());
     }
 
@@ -100,13 +127,12 @@ fn parse_url(input: &str) -> Result<Url, url::ParseError> {
 }
 
 async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
-    let Args {
+    let args @ Args {
         url,
         selector,
         attribute,
-        quiet,
-        headers,
-    } = Args::parse();
+        ..
+    } = &Args::parse();
 
     let log_on = std::env::var("RUST_LOG").is_ok();
 
@@ -116,7 +142,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Some(selector) = selector {
             let selector = Selector::parse(&selector).map_err(|_| "Invalid selector")?;
-            let body = download(&client, &url, headers, quiet).await?;
+            let body = download(&client, &url, &args).await?;
 
             let document = Html::parse_document(&body);
             document.select(&selector);
@@ -129,7 +155,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         } else {
-            let body = download(&client, &url, headers, quiet).await?;
+            let body = download(&client, &url, &args).await?;
             println!("{}", body);
         }
     } else if log_on {
