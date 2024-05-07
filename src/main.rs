@@ -6,7 +6,7 @@ use scraper::{Html, Selector};
 use std::{cmp::min, io::Write};
 use url::Url;
 
-/// Simple program to greet a person
+/// Simple tool to download and parse HTML
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
