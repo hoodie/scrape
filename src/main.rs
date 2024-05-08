@@ -1,3 +1,4 @@
+use bat::PrettyPrinter;
 use clap::Parser;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -6,7 +7,7 @@ use reqwest::{
     Client,
 };
 use scraper::{ElementRef, Html, Selector};
-use std::{cmp::min, io::Write};
+use std::{cmp::min, fmt::Write as _, io::Write as _};
 use url::Url;
 
 /// Simple tool to download and parse HTML
@@ -161,24 +162,32 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         let url = parse_url(&url)?;
         let client = reqwest::Client::new();
 
-        if let Some(selector) = selector {
+        let content = if let Some(selector) = selector {
             let selector = Selector::parse(&selector).map_err(|_| "Invalid selector")?;
             let body = download(&client, &url, &args).await?;
 
             let document = Html::parse_document(&body);
             document.select(&selector);
 
+            let mut content = String::new();
             for node in take_nodes(&document, &selector, *count) {
                 if let Some(attribute) = attribute.as_ref().and_then(|a| node.value().attr(a)) {
-                    println!("{}", attribute);
+                    writeln!(&mut content, "{}", attribute.to_owned())?;
                 } else {
-                    println!("{}", node.inner_html().trim());
+                    writeln!(&mut content, "{}", node.inner_html())?;
                 }
             }
+            content
         } else {
-            let body = download(&client, &url, &args).await?;
-            println!("{}", body);
-        }
+            download(&client, &url, &args).await?
+        };
+
+        PrettyPrinter::new()
+            .input_from_bytes(content.as_bytes())
+            .theme("1337")
+            .language("html")
+            .print()?;
+        println!();
     } else {
         if_log(|| eprintln!("need to give me a URL"))
     }
