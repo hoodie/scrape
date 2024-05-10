@@ -15,9 +15,9 @@ use url::Url;
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// which page to download
-    url: Option<String>,
+    url: String,
 
-    /// select html from the downloaded age
+    /// select html from the downloaded page (css selector)
     selector: Option<String>,
 
     /// select a certain attribute
@@ -158,39 +158,35 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         ..
     } = &Args::parse();
 
-    if let Some(url) = url {
-        let url = parse_url(&url)?;
-        let client = reqwest::Client::new();
+    let url = parse_url(&url)?;
+    let client = reqwest::Client::new();
 
-        let content = if let Some(selector) = selector {
-            let selector = Selector::parse(&selector).map_err(|_| "Invalid selector")?;
-            let body = download(&client, &url, &args).await?;
+    let content = if let Some(selector) = selector {
+        let selector = Selector::parse(&selector).map_err(|_| "Invalid selector")?;
+        let body = download(&client, &url, &args).await?;
 
-            let document = Html::parse_document(&body);
-            document.select(&selector);
+        let document = Html::parse_document(&body);
+        document.select(&selector);
 
-            let mut content = String::new();
-            for node in take_nodes(&document, &selector, *count) {
-                if let Some(attribute) = attribute.as_ref().and_then(|a| node.value().attr(a)) {
-                    writeln!(&mut content, "{}", attribute.to_owned())?;
-                } else {
-                    writeln!(&mut content, "{}", node.inner_html())?;
-                }
+        let mut content = String::new();
+        for node in take_nodes(&document, &selector, *count) {
+            if let Some(attribute) = attribute.as_ref().and_then(|a| node.value().attr(a)) {
+                writeln!(&mut content, "{}", attribute.to_owned())?;
+            } else {
+                writeln!(&mut content, "{}", node.inner_html())?;
             }
-            content
-        } else {
-            download(&client, &url, &args).await?
-        };
-
-        PrettyPrinter::new()
-            .input_from_bytes(content.as_bytes())
-            .theme("1337")
-            .language("html")
-            .print()?;
-        println!();
+        }
+        content
     } else {
-        if_log(|| eprintln!("need to give me a URL"))
-    }
+        download(&client, &url, &args).await?
+    };
+
+    PrettyPrinter::new()
+        .input_from_bytes(content.as_bytes())
+        .theme("1337")
+        .language("html")
+        .print()?;
+    println!();
     Ok(())
 }
 
