@@ -1348,6 +1348,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex"
+version = "1.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c117dbdfde9c8308975b6a18d71f3f385c89461f7b3fb054288ecf2a2058ba4c"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
 name = "regex-automata"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1490,6 +1502,7 @@ dependencies = [
  "clap",
  "futures-util",
  "indicatif",
+ "regex",
  "reqwest",
  "scraper",
  "tokio",

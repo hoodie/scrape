@@ -10,6 +10,7 @@ bat = { version = "0.24.0", default-features = false, features = ["minimal-appli
 clap = { version = "4.5", features = ["derive", "env"] }
 futures-util = "0.3"
 indicatif = "0.17"
+regex = "1.10.4"
 reqwest = {version = "0.12", features = ["stream"]}
 scraper = "0.19"
 tokio = { version = "1.37", features = ["rt"] }
@@ -22,7 +23,7 @@ default = ["single"]
 
 [profile.release]
 strip = true
-opt-level = "z"  # Optimize for size.
+opt-level = "s"  # Optimize for size.
 lto = true
 codegen-units = 1
 panic = "abort"

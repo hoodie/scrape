@@ -2,6 +2,7 @@ use bat::PrettyPrinter;
 use clap::Parser;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
+use regex::Regex;
 use reqwest::{
     header::{HeaderMap, ACCEPT, USER_AGENT},
     Client,
@@ -19,6 +20,10 @@ struct Args {
 
     /// select html from the downloaded page (css selector)
     selector: Option<String>,
+
+    /// apply regex to result
+    #[clap(short, long)]
+    regex: Option<String>,
 
     /// select a certain attribute
     #[clap(short, long)]
@@ -154,6 +159,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         url,
         selector,
         attribute,
+        regex,
         count,
         ..
     } = &Args::parse();
@@ -179,6 +185,17 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         content
     } else {
         download(&client, &url, &args).await?
+    };
+
+    let content = if let Some(regex) = regex.as_ref() {
+        Regex::new(regex)
+            .unwrap()
+            .find(&content)
+            .unwrap()
+            .as_str()
+            .to_string()
+    } else {
+        content
     };
 
     PrettyPrinter::new()
