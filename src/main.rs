@@ -149,9 +149,9 @@ fn take_nodes<'a>(
     count: Option<usize>,
 ) -> Box<dyn Iterator<Item = ElementRef<'a>> + 'a> {
     if let Some(count) = count {
-        Box::new(document.select(&selector).take(count))
+        Box::new(document.select(selector).take(count))
     } else {
-        Box::new(document.select(&selector))
+        Box::new(document.select(selector))
     }
 }
 
@@ -178,12 +178,12 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    let url = parse_url(&url)?;
+    let url = parse_url(url)?;
     let client = reqwest::Client::new();
 
     let content = if let Some(selector) = selector {
-        let selector = Selector::parse(&selector).map_err(|_| "Invalid selector")?;
-        let body = download(&client, &url, &args).await?;
+        let selector = Selector::parse(selector).map_err(|_| "Invalid selector")?;
+        let body = download(&client, &url, args).await?;
 
         let document = Html::parse_document(&body);
         document.select(&selector);
@@ -199,7 +199,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         }
         content
     } else {
-        download(&client, &url, &args).await?
+        download(&client, &url, args).await?
     };
 
     #[cfg(feature = "highlighting")]
