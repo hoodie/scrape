@@ -1,3 +1,4 @@
+#[cfg(feature = "highlighting")]
 use bat::PrettyPrinter;
 use clap::Parser;
 use futures_util::StreamExt;
@@ -59,13 +60,20 @@ fn progress_bar(total_size: u64, url: &str) -> ProgressBar {
     progress_bar
 }
 
+fn reg_select<'a>(regex: Option<&Regex>, content: &'a str) -> &'a str {
+    if let Some(found) = regex.as_ref().and_then(|r| r.find(content)) {
+        found.as_str()
+    } else {
+        content
+    }
+}
+
 async fn download(
     client: &Client,
     url: &Url,
     Args {
         headers: print_headers,
         mozilla,
-
         quiet,
         ..
     }: &Args,
@@ -164,6 +172,12 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         ..
     } = &Args::parse();
 
+    let regex = if let Some(regex) = regex.as_ref() {
+        Some(Regex::new(regex)?)
+    } else {
+        None
+    };
+
     let url = parse_url(&url)?;
     let client = reqwest::Client::new();
 
@@ -175,11 +189,12 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         document.select(&selector);
 
         let mut content = String::new();
+        let regex = regex.as_ref();
         for node in take_nodes(&document, &selector, *count) {
             if let Some(attribute) = attribute.as_ref().and_then(|a| node.value().attr(a)) {
-                writeln!(&mut content, "{}", attribute.to_owned())?;
+                writeln!(&mut content, "{}", reg_select(regex, attribute))?;
             } else {
-                writeln!(&mut content, "{}", node.inner_html())?;
+                writeln!(&mut content, "{}", reg_select(regex, &node.inner_html()))?;
             }
         }
         content
@@ -187,22 +202,14 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
         download(&client, &url, &args).await?
     };
 
-    let content = if let Some(regex) = regex.as_ref() {
-        Regex::new(regex)
-            .unwrap()
-            .find(&content)
-            .unwrap()
-            .as_str()
-            .to_string()
-    } else {
-        content
-    };
-
+    #[cfg(feature = "highlighting")]
     PrettyPrinter::new()
         .input_from_bytes(content.as_bytes())
         .theme("1337")
         .language("html")
         .print()?;
+    #[cfg(not(feature = "highlighting"))]
+    println!("{content}");
     println!();
     Ok(())
 }
@@ -219,7 +226,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .enable_all()
         .build()?
         .block_on(async {
-            the_main().await.unwrap();
+            if let Err(error) = the_main().await {
+                println!("{error}")
+            }
         });
     Ok(())
 }
