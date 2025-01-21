@@ -5,7 +5,7 @@ use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 use reqwest::{
-    header::{HeaderMap, ACCEPT, USER_AGENT},
+    header::{HeaderMap, ACCEPT, CONTENT_TYPE, USER_AGENT},
     Client,
 };
 use scraper::{ElementRef, Html, Selector};
@@ -45,6 +45,18 @@ struct Args {
     /// print count nodes only
     #[clap(long, short = 'n')]
     count: Option<usize>,
+
+    /// turn off syntax highlighting
+    #[clap(long)]
+    no_colors: bool,
+
+    /// bat color syntax highlighting theme
+    #[clap(long, short, default_value = "1337")]
+    theme: String,
+
+    /// the syntax which should be used (default: auto-detect)
+    #[clap(long, short)]
+    lang: Option<String>,
 }
 
 fn progress_bar(total_size: u64, url: &str) -> ProgressBar {
@@ -68,6 +80,23 @@ fn reg_select<'a>(regex: Option<&Regex>, content: &'a str) -> &'a str {
     }
 }
 
+fn guess_language(headers: &HeaderMap) -> Option<&'static str> {
+    let content_type = headers
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|c| c.split_once(';').map(|(ct, _)| ct).unwrap_or(c));
+    match content_type {
+        Some("text/html") => Some("html"),
+        Some("application/json") => Some("json"),
+        _ => None,
+    }
+}
+
+struct Content {
+    body: String,
+    language: Option<&'static str>,
+}
+
 async fn download(
     client: &Client,
     url: &Url,
@@ -77,7 +106,7 @@ async fn download(
         quiet,
         ..
     }: &Args,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<Content, Box<dyn std::error::Error>> {
     let mut headers = HeaderMap::new();
 
     if *mozilla {
@@ -101,6 +130,8 @@ async fn download(
     if *print_headers {
         eprintln!("{:#?}", res.headers());
     }
+
+    let language = guess_language(&res.headers());
 
     if let Some(total_size) = res.content_length() {
         let progress_bar = (!quiet).then(|| progress_bar(total_size, url.as_str()));
@@ -128,11 +159,17 @@ async fn download(
             progress_bar.finish_and_clear();
         }
 
-        Ok(String::from_utf8(buffer)?)
+        Ok(Content {
+            body: String::from_utf8(buffer)?,
+            language,
+        })
     } else {
         if_log(|| eprintln!("no content-length header for '{}'", &url));
 
-        Ok(res.text().await?)
+        Ok(Content {
+            body: res.text().await?,
+            language,
+        })
     }
 }
 
@@ -183,7 +220,7 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
 
     let content = if let Some(selector) = selector {
         let selector = Selector::parse(selector).map_err(|_| "Invalid selector")?;
-        let body = download(&client, &url, args).await?;
+        let Content { body, language } = download(&client, &url, args).await?;
 
         let document = Html::parse_document(&body);
         document.select(&selector);
@@ -197,19 +234,49 @@ async fn the_main() -> Result<(), Box<dyn std::error::Error>> {
                 writeln!(&mut content, "{}", reg_select(regex, &node.inner_html()))?;
             }
         }
-        content
+        Content {
+            body: content,
+            language,
+        }
     } else {
         download(&client, &url, args).await?
     };
 
     #[cfg(feature = "highlighting")]
-    PrettyPrinter::new()
-        .input_from_bytes(content.as_bytes())
-        .theme("1337")
-        .language("html")
-        .print()?;
+    print_content(content, args)?;
     #[cfg(not(feature = "highlighting"))]
     println!("{content}");
+
+    Ok(())
+}
+
+#[cfg(feature = "highlighting")]
+fn print_content(
+    content: Content,
+    Args {
+        theme,
+        no_colors,
+        lang,
+        ..
+    }: &Args,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if *no_colors {
+        println!("{}", content.body);
+        return Ok(());
+    }
+    if let Some(language) = content.language.or(lang.as_deref()) {
+        PrettyPrinter::new()
+            .input_from_bytes(content.body.as_bytes())
+            .theme(&theme)
+            .language(language)
+            .print()?;
+    } else {
+        PrettyPrinter::new()
+            .input_from_bytes(content.body.as_bytes())
+            .theme(&theme)
+            .print()?;
+    }
+
     println!();
     Ok(())
 }
