@@ -131,7 +131,7 @@ async fn download(
         eprintln!("{:#?}", res.headers());
     }
 
-    let language = guess_language(&res.headers());
+    let language = guess_language(res.headers());
 
     if let Some(total_size) = res.content_length() {
         let progress_bar = (!quiet).then(|| progress_bar(total_size, url.as_str()));
@@ -267,13 +267,13 @@ fn print_content(
     if let Some(language) = content.language.or(lang.as_deref()) {
         PrettyPrinter::new()
             .input_from_bytes(content.body.as_bytes())
-            .theme(&theme)
+            .theme(theme)
             .language(language)
             .print()?;
     } else {
         PrettyPrinter::new()
             .input_from_bytes(content.body.as_bytes())
-            .theme(&theme)
+            .theme(theme)
             .print()?;
     }
 

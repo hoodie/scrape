@@ -1,22 +1,22 @@
 [package]
 name = "scrape"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 clap = { version = "4.5", features = ["derive", "env"] }
 futures-util = "0.3"
-indicatif = "0.17"
-jsonpath-rust = "0.7"
-regex = "1.11.1"
+indicatif = "0.18"
+jsonpath-rust = "1.0"
+regex = "1.12.2"
 reqwest = {version = "0.12", features = ["stream"]}
-scraper = "0.22"
-tokio = { version = "1.43", features = ["rt"] }
-url = "2.5.4"
+scraper = "0.24"
+tokio = { version = "1.48", features = ["rt"] }
+url = "2.5.7"
 [dependencies.bat]
-version = "0.25.0"
+version = "0.26.0"
 default-features = false
 features = ["minimal-application"]
 optional = true
